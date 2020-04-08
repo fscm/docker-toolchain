@@ -4,7 +4,7 @@ An image with some of the GNU toolchain tools and libraries.
 
 ## Supported tags
 
-- `0.0.1-base`, `base`, `latest`
+- `0.0.1`, `latest`
 
 ## What is a Toolchain?
 
