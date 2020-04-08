@@ -1,0 +1,19 @@
+#echo "--- Loading config.site for ${PACKAGE_NAME:-unknown} ---"
+
+#CFLAGS="-Os -s -w -pipe"
+CFLAGS="-O3 -s -w -pipe -m64 -mtune=generic"
+CPPFLAGS="${CFLAGS}"
+CXXFLAGS="${CFLAGS}"
+LIBTOOLFLAGS="--quiet"
+
+SED="sed"
+
+prefix="${__PREFIX__:-/usr/local}"
+exec_prefix='${prefix}'
+docdir='${prefix}'/_delete_/share/doc
+infodir='${prefix}'/_delete_/share/info
+libdir='${prefix}'/lib64
+libexecdir='${prefix}'/lib64
+localstatedir='${prefix}'/_delete_/share/var
+mandir='${prefix}'/_delete_/share/man
+sbindir='${prefix}'/bin
