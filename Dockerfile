@@ -34,7 +34,8 @@ ENV \
 
 USER ${__USER__}
 
-COPY --chown=${__USER__}:${__USER__} "LICENSE" "files/" "${__WORK_DIR__}/"
+#COPY --chown=${__USER__}:${__USER__} "LICENSE" "files/" "${__WORK_DIR__}/"
+COPY "LICENSE" "files/" "${__WORK_DIR__}/"
 
 WORKDIR "${__WORK_DIR__}"
 
