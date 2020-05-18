@@ -76,7 +76,7 @@ RUN \
   echo '=== setting build env ===' && \
   set +h && \
   export __ARCH__="$(arch)" && \
-  export __GNU_TYPE__="${__ARCH__}-fscm-linux-gnu" && \
+  export __GNU_BUILD_TYPE__="${__ARCH__}-build-linux-gnu" && \
   export __NPROC__="$(getconf _NPROCESSORS_ONLN || echo 1)" && \
   export __MAKEFLAGS__="--silent --output-sync --no-print-directory --jobs ${__NPROC__} V=0" && \
   export __PKG_VERSION__="fscm-$(date +%Y.%m.%d)" && \
@@ -114,7 +114,7 @@ RUN \
   find ../ -name '*.info' -exec touch {} ';' && \
   ../configure \
     --quiet \
-    --target="${__GNU_TYPE__}" \
+    --target="${__GNU_BUILD_TYPE__}" \
     --with-lib-path="${__PREFIX__}/lib64" \
     --with-pkgversion="${__PKG_VERSION__}" \
     --with-sysroot="/" \
@@ -147,7 +147,7 @@ RUN \
   find ../ -name '*.info' -exec touch {} ';' && \
   ../configure \
     --quiet \
-    --target="${__GNU_TYPE__}" \
+    --target="${__GNU_BUILD_TYPE__}" \
     --with-gcc-major-version-only \
     --with-glibc-version="${GLIBC_VERSION}" \
     --with-local-prefix="${__PREFIX__}" \
@@ -195,7 +195,7 @@ RUN \
   ../configure \
     --quiet \
     --build="$(../scripts/config.guess)" \
-    --host="${__GNU_TYPE__}" \
+    --host="${__GNU_BUILD_TYPE__}" \
     --with-__thread \
     --with-headers="${__PREFIX__}/include" \
     --with-pkgversion="${__PKG_VERSION__}" \
@@ -231,9 +231,9 @@ RUN \
   cd "${__SOURCE_DIR__}/gcc/_build_libstdc" && \
   ../libstdc++-v*/configure \
     --quiet \
-    --host="${__GNU_TYPE__}" \
+    --host="${__GNU_BUILD_TYPE__}" \
     --with-gcc-major-version-only \
-    --with-gxx-include-dir="${__PREFIX__}/${__GNU_TYPE__}/include/c++/${GCC_VERSION%%.*}" \
+    --with-gxx-include-dir="${__PREFIX__}/${__GNU_BUILD_TYPE__}/include/c++/${GCC_VERSION%%.*}" \
     --enable-silent-rules \
     --enable-tls \
     --disable-libstdcxx-pch \
@@ -252,10 +252,10 @@ RUN \
   cd "${__SOURCE_DIR__}/zlib/_build" && \
   sed -i.orig -e "/^mandir=/ s,=.*,='\${prefix}/_delete_/share/man'," ../configure && \
   sed -i.orig -e "/^pkgconfigdir =/ s,= .*,= \${prefix}/_delete_/pkgconfig," ../Makefile.in && \
-  AR="${__GNU_TYPE__}-ar" \
-  CC="${__GNU_TYPE__}-gcc" \
-  CPP="${__GNU_TYPE__}-gcc -E" \
-  RANLIB="${__GNU_TYPE__}-ranlib" \
+  AR="${__GNU_BUILD_TYPE__}-ar" \
+  CC="${__GNU_BUILD_TYPE__}-gcc" \
+  CPP="${__GNU_BUILD_TYPE__}-gcc -E" \
+  RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
   ../configure \
     --prefix="${__PREFIX__}" \
     --libdir="${__PREFIX__}/lib64" \
@@ -272,10 +272,10 @@ RUN \
   echo '=== installing binutils (2) ===' && \
   install --directory "${__SOURCE_DIR__}/binutils/_build" && \
   cd "${__SOURCE_DIR__}/binutils/_build" && \
-  AR="${__GNU_TYPE__}-ar" \
-  CC="${__GNU_TYPE__}-gcc" \
-  CXX="${__GNU_TYPE__}-g++" \
-  RANLIB="${__GNU_TYPE__}-ranlib" \
+  AR="${__GNU_BUILD_TYPE__}-ar" \
+  CC="${__GNU_BUILD_TYPE__}-gcc" \
+  CXX="${__GNU_BUILD_TYPE__}-g++" \
+  RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
   ../configure \
     --quiet \
     --with-gcc-major-version-only \
@@ -312,11 +312,11 @@ RUN \
   echo '=== installing gcc (2) ===' && \
   install --directory "${__SOURCE_DIR__}/gcc/_build" && \
   cd "${__SOURCE_DIR__}/gcc/_build" && \
-  cat ../gcc/{limitx.h,glimits.h,limity.h} > "$(dirname $(${__GNU_TYPE__}-gcc -print-libgcc-file-name))/include-fixed/limits.h" && \
-  AR="${__GNU_TYPE__}-ar" \
-  CC="${__GNU_TYPE__}-gcc" \
-  CXX="${__GNU_TYPE__}-g++" \
-  RANLIB="${__GNU_TYPE__}-ranlib" \
+  cat ../gcc/{limitx.h,glimits.h,limity.h} > "$(dirname $(${__GNU_BUILD_TYPE__}-gcc -print-libgcc-file-name))/include-fixed/limits.h" && \
+  AR="${__GNU_BUILD_TYPE__}-ar" \
+  CC="${__GNU_BUILD_TYPE__}-gcc" \
+  CXX="${__GNU_BUILD_TYPE__}-g++" \
+  RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
   ../configure \
     --quiet \
     --with-gcc-major-version-only \
@@ -354,8 +354,8 @@ RUN \
   rm -rf "${__SOURCE_DIR__}/gcc" && \
 # cleanup
   echo '=== cleaning up ===' && \
-  find "${__BUILD_DIR__}${__PREFIX__}" -depth -type d -name "${__GNU_TYPE__}" -exec rm -rf '{}' + && \
-  find "${__BUILD_DIR__}${__PREFIX__}" -depth -type f -name "${__GNU_TYPE__}*" -delete && \
+  find "${__BUILD_DIR__}${__PREFIX__}" -depth -type d -name "${__GNU_BUILD_TYPE__}" -exec rm -rf '{}' + && \
+  find "${__BUILD_DIR__}${__PREFIX__}" -depth -type f -name "${__GNU_BUILD_TYPE__}*" -delete && \
 # m4
   echo '=== installing m4 ===' && \
   install --directory "${__SOURCE_DIR__}/m4/_build" && \
