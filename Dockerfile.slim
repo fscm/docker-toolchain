@@ -1,0 +1,488 @@
+# global args
+ARG __BUILD_DIR__="/build"
+ARG __PREFIX__="/usr/local/toolchain"
+ARG __WORK_DIR__="/work"
+
+
+
+FROM fscm/centos:8 as build
+
+ARG __BUILD_DIR__
+ARG __PREFIX__
+ARG __WORK_DIR__
+ARG BINUTILS_VERSION="2.34"
+ARG BUSYBOX_VERSION="1.31.1"
+ARG GCC_VERSION="10.1.0"
+ARG GLIBC_VERSION="2.31"
+ARG KERNEL_VERSION="5.6.14"
+ARG LIBTOOL_VERSION="2.4.6"
+ARG M4_VERSION="1.4.18"
+ARG MAKE_VERSION="4.3"
+ARG ZLIB_VERSION="1.2.11"
+ARG __SOURCE_DIR__="${__WORK_DIR__}/src"
+ARG __USER__="root"
+
+ENV \
+  LANG="C.utf8" \
+  LC_ALL="C.utf8" \
+  PATH="${__PREFIX__}/bin:${PATH}"
+
+USER ${__USER__}
+
+#COPY --chown="${__USER__}":${__USER__} "LICENSE" "files/" "${__WORK_DIR__}/"
+COPY "LICENSE" "files/" "${__WORK_DIR__}/"
+COPY --from=busybox:uclibc "/bin/busybox" "${__WORK_DIR__}/"
+
+WORKDIR "${__WORK_DIR__}"
+
+RUN \
+# build env
+  echo '=== setting build env ===' && \
+  time { \
+    set +h && \
+    export __DCACHE_LINESIZE__="$(getconf LEVEL1_DCACHE_LINESIZE)"
+    export __GNU_BUILD_TYPE__='x86_64-build-linux-gnu' && \
+    export __NPROC__="$(getconf _NPROCESSORS_ONLN || echo 1)" && \
+    export __PKG_VERSION__="fscm-$(date +%Y.%m.%d)" && \
+    export CONFIG_SITE="${__WORK_DIR__}/autoconf/config.site" ; \
+    export MAKEFLAGS="--silent --output-sync --no-print-directory --jobs ${__NPROC__}" && \
+    export TIMEFORMAT='=== time taken: %lR' ; \
+  } && \
+# build structure
+  echo '=== creating build structure ===' && \
+  time { \
+    for folder in ${__PREFIX__}; do install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}${folder}"; install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "$(dirname ${folder})"; ln --symbolic "${__BUILD_DIR__}${folder}" "${folder}"; done && \
+    for folder in bin sbin; do install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}/usr/${folder}"; ln --symbolic "usr/${folder}" "${__BUILD_DIR__}/${folder}"; done && \
+    for folder in tmp ${__WORK_DIR__}; do install --directory --owner="${__USER__}" --group="${__USER__}" --mode=1777 "${__BUILD_DIR__}/${folder}"; done ; \
+  } && \
+# copy tests
+  echo '=== copying test files ===' && \
+  time { \
+    install --owner="${__USER__}" --group="${__USER__}" --mode=0755 --target-directory="${__BUILD_DIR__}/usr/bin" ${__WORK_DIR__}/tests/slim/* ; \
+  } && \
+# dependencies
+  echo '=== instaling dependencies ===' && \
+  time { \
+    yum --assumeyes --quiet --enablerepo=PowerTools install \
+      binutils \
+      bison \
+      byacc \
+      bzip2 \
+      coreutils-single \
+      curl \
+      diffutils \
+      file \
+      findutils \
+      flex \
+      gawk \
+      gcc \
+      gcc-c++ \
+      gettext \
+      glib2-static \
+      glibc-static \
+      gzip \
+      libstdc++-static \
+      m4 \
+      make \
+      patch \
+      perl-Thread-Queue \
+      python3-devel \
+      rsync \
+      sed \
+      tar \
+      texinfo \
+      wget \
+      xz ; \
+  } && \
+# kernel headers
+  echo '=== installing kernel headers ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/kernel" && \
+    curl --silent --location --retry 3 "https://cdn.kernel.org/pub/linux/kernel/v${KERNEL_VERSION%%.*}.x/linux-${KERNEL_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/kernel" --wildcards "*LICENSE*" "*COPYING*" $(echo linux-*/{Makefile,arch,include,scripts,tools,usr}) && \
+    cd "${__SOURCE_DIR__}/kernel" && \
+    make INSTALL_HDR_PATH="${__PREFIX__}" headers_install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/linux" && \
+    find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/linux" ';' && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/kernel" ; \
+  } && \
+# binutils (1)
+  echo '=== installing binutils (1) ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/binutils/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/binutils/binutils-${BINUTILS_VERSION}.tar.bz2" \
+      | tar xj --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/binutils" && \
+    cd "${__SOURCE_DIR__}/binutils/_build" && \
+    for file in $(grep -l 'sys_lib_dlsearch_path_spec=.*lt_ld_extra' ../*/configure); do \
+      sed -i.orig -e '/sys_lib_dlsearch_path_spec=.*lt_ld_extra/ s,lib\( \+\|/\|$\),lib64\1,g' ${file}; \
+    done && \
+    sed -i.orig -e '/^scriptdir =/ s,lib\(/\|$\),lib64\1,' ../ld/Makefile.in && \
+    find ../ -name '*.info' -exec touch {} ';' && \
+    ../configure \
+      --quiet \
+      --target="${__GNU_BUILD_TYPE__}" \
+      --with-lib-path="${__PREFIX__}/lib64" \
+      --with-pkgversion="${__PKG_VERSION__}" \
+      --with-sysroot="${__BUILD_DIR__}" \
+      --without-debuginfod \
+      --enable-ld \
+      --disable-debug \
+      --disable-gdb \
+      --disable-multilib \
+      --disable-nls \
+      --disable-werror && \
+    make MAKEINFO=true > /dev/null && \
+    make MAKEINFO=true install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/binutils" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/binutils" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/binutils/_build" ; \
+  } && \
+# gcc (1)
+  echo '=== installing gcc (1) ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/gcc/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/gcc" && \
+    cd "${__SOURCE_DIR__}/gcc/_build" && \
+    sed -i.orig -e '/fetch/ s/wget/wget -q/' ../contrib/download_prerequisites && \
+    (cd .. && ./contrib/download_prerequisites) && \
+    find ../gcc/config{,/i386} -maxdepth 1 -type f -a \( -name 'linux.h' -o -name 'linux64.h' \) -exec sed -i.orig -e "s,/usr,${__PREFIX__},g" -e "s,/lib\(\|64\|32\)/ld,${__PREFIX__}&,g" {} ';' && \
+    find ../gcc/config{,/i386} -maxdepth 1 -type f -a \( -name 'linux.h' -o -name 'linux64.h' \) -exec sh -c 'echo -e "\n#undef STANDARD_STARTFILE_PREFIX_1\n#undef STANDARD_STARTFILE_PREFIX_2\n#define STANDARD_STARTFILE_PREFIX_1 \"${__PREFIX__}/lib64/\"\n#define STANDARD_STARTFILE_PREFIX_2 \"\"" >> {}' ';' && \
+    find ../ -name '*.info' -exec touch {} ';' && \
+    ../configure \
+      --quiet \
+      --target="${__GNU_BUILD_TYPE__}" \
+      --with-gcc-major-version-only \
+      --with-glibc-version="$(rpm -q --qf '%{version}' glibc)" \
+      --with-local-prefix="${__PREFIX__}" \
+      --with-native-system-header-dir="${__PREFIX__}/include" \
+      --with-newlib \
+      --with-pkgversion="${__PKG_VERSION__}" \
+      --with-sysroot="${__BUILD_DIR__}" \
+      --with-tune='generic' \
+      --without-headers \
+      --enable-checking='release' \
+      --enable-languages='c,c++' \
+      --enable-silent-rules \
+      --disable-debug \
+      --disable-decimal-float \
+      --disable-libatomic \
+      --disable-libgomp \
+      --disable-libquadmath \
+      --disable-libquadmath-support \
+      --disable-libssp \
+      --disable-libstdcxx \
+      --disable-libvtv \
+      --disable-multilib \
+      --disable-nls \
+      --disable-shared \
+      --disable-threads && \
+    make MAKEINFO=true > /dev/null && \
+    make MAKEINFO=true install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/gcc" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/gcc" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/gcc/_build" ; \
+  } && \
+# glibc
+  echo '=== installing glibc ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/glibc/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/glibc" && \
+    cd "${__SOURCE_DIR__}/glibc/_build" && \
+    sed -i.orig -e '/^\(\|root\)sbindir =/ s,/sbin,/bin,' -e '/^\(\|s\)libdir =/ s,/lib,/lib64,' ../Makeconfig && \
+    sed -i.orig -e '/@BASH@/c #!/bin/sh' -e 's/$"/"/' -e '/read -p/c \ \ printf "Press return here to close %s(%s)." "$TERMINAL_PROG" "$program"; read'  ../debug/xtrace.sh && \
+    sed -i.orig -e '/@BASH@/c #!/bin/sh' -e 's/$"/"/' ../elf/ldd.bash.in && \
+    sed -i.orig -e '/@BASH@/c #!/bin/sh' -e 's/$"/"/' ../elf/sotruss.sh && \
+    sed -i.orig -e 's,/bin/bash,/bin/sh,' ../timezone/tzselect.ksh && \
+    find ../locale/programs -name '*-kw.h' -exec touch {} ';' && \
+    find ../ -name 'configure' -exec touch {} ';' && \
+    ../configure \
+      --quiet \
+      --build="$(../scripts/config.guess)" \
+      --host="${__GNU_BUILD_TYPE__}" \
+      --cache-file="${__SOURCE_DIR__}/glibc/_build/config.cache" \
+      --with-__thread \
+      --with-headers="${__PREFIX__}/include" \
+      --with-pkgversion="${__PKG_VERSION__}" \
+      --with-tls \
+      --without-cvs \
+      --without-gd \
+      --without-selinux \
+      --enable-add-ons \
+      --enable-bind-now \
+      --enable-kernel="3.2.0" \
+      --enable-shared \
+      --enable-stack-protector=strong \
+      --enable-tunables \
+      --disable-build-nscd \
+      --disable-debug \
+      --disable-nscd \
+      --disable-profile \
+      --disable-timezone-tools \
+      --disable-werror && \
+    make > /dev/null && \
+    make install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/lib64/locale" && \
+    ( ./locale/localedef --quiet --inputfile=POSIX --charmap=UTF-8 C.UTF-8 || true ) && \
+    truncate --size=0 "${__PREFIX__}/etc/ld.so.conf" && \
+    for folder in $(echo {${__PREFIX__},/usr{/local,},}/{lib64,lib}); do if [ -d ${folder} ]; then echo ${folder} >> "${__PREFIX__}/etc/ld.so.conf"; fi; done && \
+    echo 'include /etc/ld.so.conf.d/*.conf' >> "${__PREFIX__}/etc/ld.so.conf" && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/glibc" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/glibc" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/glibc" ; \
+  } && \
+# libstdc++
+  echo '=== installing libstdc++ ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/gcc/_build_libstdc" && \
+    cd "${__SOURCE_DIR__}/gcc/_build_libstdc" && \
+    ../libstdc++-v*/configure \
+      --quiet \
+      --host="${__GNU_BUILD_TYPE__}" \
+      --with-gcc-major-version-only \
+      --with-gxx-include-dir="${__PREFIX__}/${__GNU_BUILD_TYPE__}/include/c++/${GCC_VERSION%%.*}" \
+      --enable-silent-rules \
+      --enable-tls \
+      --disable-libstdcxx-pch \
+      --disable-libstdcxx-threads \
+      --disable-multilib \
+      --disable-nls && \
+    make > /dev/null && \
+    make install > /dev/null && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/gcc/_build_libstdc" ; \
+  } && \
+# zlib
+  echo '=== installing zlib ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/zlib/_build" && \
+    curl --silent --location --retry 3 "https://zlib.net/zlib-${ZLIB_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/zlib" && \
+    cd "${__SOURCE_DIR__}/zlib/_build" && \
+    sed -i.orig -e "/^mandir=/ s,=.*,='\${prefix}/_delete_/share/man'," ../configure && \
+    sed -i.orig -e "/^pkgconfigdir =/ s,= .*,= \${prefix}/_delete_/pkgconfig," ../Makefile.in && \
+    AR="${__GNU_BUILD_TYPE__}-ar" \
+    CC="${__GNU_BUILD_TYPE__}-gcc" \
+    RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
+    ../configure \
+      --prefix="${__PREFIX__}" \
+      --libdir="${__PREFIX__}/lib64" \
+      --sharedlibdir="${__PREFIX__}/lib64" \
+      --includedir="${__PREFIX__}/include" \
+      > /dev/null && \
+    make > /dev/null && \
+    make install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/zlib" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/zlib" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/zlib" ; \
+  } && \
+# binutils (2)
+  echo '=== installing binutils (2) ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/binutils/_build" && \
+    cd "${__SOURCE_DIR__}/binutils/_build" && \
+    AR="${__GNU_BUILD_TYPE__}-ar" \
+    CC="${__GNU_BUILD_TYPE__}-gcc" \
+    CXX="${__GNU_BUILD_TYPE__}-g++" \
+    RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
+    ../configure \
+      --quiet \
+      --with-lib-path="${__PREFIX__}/lib64:/usr/local/lib64:/usr/lib64:/lib64:/usr/local/lib:/usr/lib:/lib" \
+      --with-pkgversion="${__PKG_VERSION__}" \
+      --with-sysroot \
+      --with-system-zlib \
+      --without-debuginfod \
+      --enable-64-bit-bfd \
+      --enable-gold \
+      --enable-host-shared \
+      --enable-install-libiberty \
+      --enable-ld=default \
+      --enable-plugins \
+      --enable-shared \
+      --enable-static \
+      --enable-threads=posix \
+      --disable-debug \
+      --disable-gdb \
+      --disable-nls \
+      --disable-werror && \
+    make MAKEINFO=true tooldir="${__PREFIX__}" > /dev/null && \
+    make MAKEINFO=true tooldir="${__PREFIX__}" install-strip > /dev/null && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/binutils" ; \
+  } && \
+# gcc (2)
+  echo '=== installing gcc (2) ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/gcc/_build" && \
+    cd "${__SOURCE_DIR__}/gcc/_build" && \
+    cat ../gcc/{limitx.h,glimits.h,limity.h} > "$(dirname $(${__GNU_BUILD_TYPE__}-gcc -print-libgcc-file-name))/include-fixed/limits.h" && \
+    AR="${__GNU_BUILD_TYPE__}-ar" \
+    CC="${__GNU_BUILD_TYPE__}-gcc" \
+    CXX="${__GNU_BUILD_TYPE__}-g++" \
+    RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
+    ../configure \
+      --quiet \
+      --with-gcc-major-version-only \
+      --with-glibc-version=2.11 \
+      --with-local-prefix="${__PREFIX__}" \
+      --with-native-system-header-dir="${__PREFIX__}/include" \
+      --with-pkgversion="${__PKG_VERSION__}" \
+      --with-system-zlib \
+      --without-debuginfod \
+      --enable-__cxa_atexit \
+      --enable-host-shared \
+      --enable-languages=c,c++ \
+      --enable-libstdcxx-threads \
+      --enable-silent-rules \
+      --enable-shared \
+      --enable-static \
+      --enable-threads=posix \
+      --enable-tls \
+      --disable-bootstrap \
+      --disable-debug \
+      --disable-libgomp \
+      --disable-libstdcxx-pch \
+      --disable-multilib \
+      --disable-nls && \
+    make MAKEINFO=true tooldir="${__PREFIX__}" > /dev/null && \
+    make MAKEINFO=true tooldir="${__PREFIX__}" install-strip > /dev/null && \
+    ln --symbolic 'gcc' "${__PREFIX__}/bin/cc" && \
+    ln --symbolic '../bin/cpp' "${__PREFIX__}/lib64/cpp" && \
+    rm -rf "${__PREFIX__}/lib64/gcc/$(gcc -dumpmachine)/$(gcc -dumpversion)/include-fixed/bits" && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/lib64/bfd-plugins" && \
+    ln --symbolic "../gcc/$(gcc -dumpmachine)/$(gcc -dumpversion)/liblto_plugin.so" "${__PREFIX__}/lib64/bfd-plugins" && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/share/gdb/auto-load/usr/lib64" && \
+    mv "${__PREFIX__}/lib64/"*gdb.py "${__PREFIX__}/share/gdb/auto-load/usr/lib64" && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/gcc" ; \
+  } && \
+# cleanup
+  echo '=== cleaning up ===' && \
+  time { \
+    find "${__BUILD_DIR__}${__PREFIX__}" -depth -type d -name "${__GNU_BUILD_TYPE__}" -exec rm -rf '{}' + && \
+    find "${__BUILD_DIR__}${__PREFIX__}" -depth -type f -name "${__GNU_BUILD_TYPE__}*" -delete ; \
+  } && \
+# m4
+  echo '=== installing m4 ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/m4/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/m4/m4-${M4_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/m4" && \
+    cd "${__SOURCE_DIR__}/m4/_build" && \
+    sed -i.orig -e 's/IO_ftrylockfile/IO_EOF_SEEN/' ../lib/*.c && \
+    /usr/bin/echo -e '\n#if !defined _IO_IN_BACKUP && defined _IO_EOF_SEEN\n# define _IO_IN_BACKUP 0x100\n#endif' >> ../lib/stdio-impl.h && \
+    ../configure \
+      --quiet \
+      --with-packager="${__PKG_VERSION__%%-*}" \
+      --with-packager-version="${__PKG_VERSION__}" && \
+    make --silent > /dev/null && \
+    make --silent install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/m4" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/m4" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/m4" ; \
+  } && \
+# make
+  echo '=== installing make ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/make/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/make/make-${MAKE_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/make" && \
+    cd "${__SOURCE_DIR__}/make/_build" && \
+    ../configure \
+      --quiet \
+      --without-guile && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/make" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/make" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/make" ; \
+  } && \
+# libtool
+  echo '=== installing libtool ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/libtool/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/libtool/libtool-${LIBTOOL_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libtool" && \
+    cd "${__SOURCE_DIR__}/libtool/_build" && \
+    ../configure \
+      --quiet \
+      --with-sysroot \
+      --enable-ltdl-install && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/libtool" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/libtool" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/libtool" ; \
+  } && \
+# cleanup
+  echo '=== cleaning up ===' && \
+  time { \
+    rm -rf "${__BUILD_DIR__}${__PREFIX__}/_delete_" && \
+    find "${__BUILD_DIR__}${__PREFIX__}/lib64" -type f -name '*.la' -delete ; \
+  } && \
+# busybox
+  echo '=== installing busybox ===' && \
+  time { \
+    install --owner=${__USER__} --group=${__USER__} --mode=0755 --target-directory="${__BUILD_DIR__}/usr/bin" "${__WORK_DIR__}/busybox" && \
+    install --directory --owner=${__USER__} --group=${__USER__} --mode=0755 "${__BUILD_DIR__}/licenses/busybox" && \
+    curl --silent --location --retry 3 "https://busybox.net/downloads/busybox-$(${__BUILD_DIR__}/usr/bin/busybox --help | head -1 | sed -E -n -e 's/.*v([0-9\.]+) .*/\1/p').tar.bz2" \
+      | tar xj --no-same-owner --strip-components=1 -C "${__BUILD_DIR__}/licenses/busybox" --wildcards '*LICENSE*' && \
+    for applet in $("${__BUILD_DIR__}"/usr/bin/busybox --list-all); do ln "${__BUILD_DIR__}/usr/bin/busybox" "${__BUILD_DIR__}/${applet}"; done ; \
+  } && \
+# stripping
+  echo '=== stripping libraries and binaries ===' && \
+  time { \
+    find "${__BUILD_DIR__}${__PREFIX__}/lib64" -type f -name '*.a' -exec strip --strip-debug {} ';' && \
+    find "${__BUILD_DIR__}${__PREFIX__}/lib64" -type f -name '*.so*' -exec strip --strip-unneeded {} ';' && \
+    find "${__BUILD_DIR__}${__PREFIX__}/bin" -type f -not -links +1 -exec strip --strip-all {} ';' ; \
+  } && \
+# licenses
+  echo '=== project licenses ===' && \
+  time { \
+    install --owner="${__USER__}" --group="${__USER__}" --mode=0644 --target-directory="${__BUILD_DIR__}${__PREFIX__}/licenses" "${__WORK_DIR__}/LICENSE" && \
+    (cd "${__BUILD_DIR__}${__PREFIX__}/licenses" && for project in *; do if [ ! -e "${__BUILD_DIR__}/licenses/${project}" ]; then ln --symbolic "..${__PREFIX__}/licenses/${project}" "${__BUILD_DIR__}/licenses/${project}"; fi; done) ; \
+  } && \
+# system settings
+  echo '=== system settings ===' && \
+  time { \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}/run/systemd" && \
+    echo 'docker' > "${__BUILD_DIR__}/run/systemd/container" ; \
+  } && \
+# done
+  echo '=== all done! ==='
+
+
+
+FROM scratch
+
+ARG __BUILD_DIR__
+ARG __PREFIX__
+ARG __WORK_DIR__
+
+LABEL \
+  maintainer="Frederico Martins <https://hub.docker.com/u/fscm/>" \
+  vendor="fscm" \
+  cmd="docker container run --interactive --rm --tty fscm/toolchain:slim" \
+  params="--volume ./:${__WORK_DIR__}:rw"
+
+COPY --from=build "${__BUILD_DIR__}" "/"
+
+VOLUME ["${__WORK_DIR__}"]
+
+WORKDIR "${__WORK_DIR__}"
+
+ENV \
+  LANG="C.utf8" \
+  LC_ALL="C.utf8" \
+  PATH="${__PREFIX__}/bin:${PATH}"
+
+CMD ["/usr/bin/sh"]

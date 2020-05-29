@@ -1,0 +1,200 @@
+#!/bin/sh
+#
+# Shell script to test the Toolchain Docker image.
+#
+# Copyright 2016-2020, Frederico Martins
+#   Author: Frederico Martins <http://github.com/fscm>
+#
+# SPDX-License-Identifier: MIT
+#
+# This program is free software. You can use it and/or modify it under the
+# terms of the MIT License.
+#
+
+# Variables
+GCC_TEST_FILE="gcc.c"
+GXX_TEST_FILE="gxx.cc"
+GLIBC_TEST_FILE="glibc.c"
+MAKE_TEST_FILE="Makefile"
+
+
+# Functions
+create_gcc_test_files() {
+  cat << EOF > /tmp/${GCC_TEST_FILE}
+#include <stdio.h>
+int main() {
+  puts("Hello, world!");
+  return 0;
+}
+EOF
+
+  cat << EOF > /tmp/${GXX_TEST_FILE}
+#include <iostream>
+int main() {
+  std::cout << "Hello, world!" << std::endl;
+  return 0;
+}
+EOF
+}
+
+create_glibc_test_files() {
+  cat << EOF > /tmp/${GLIBC_TEST_FILE}
+#define _GNU_SOURCE
+#include <assert.h>
+#include <gnu/libc-version.h>
+#include <stdatomic.h>
+#include <stdio.h>
+#include <threads.h>
+
+atomic_int acnt;
+int cnt;
+
+int f(void* thr_data) {
+  for(int n = 0; n < 1000; ++n) {
+    ++cnt;
+    ++acnt;
+  }
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  printf("gnu_get_libc_version() = %s\n", gnu_get_libc_version());
+  thrd_t thr[10];
+  for(int n = 0; n < 10; ++n)
+    thrd_create(&thr[n], f, NULL);
+  for(int n = 0; n < 10; ++n)
+    thrd_join(thr[n], NULL);
+  printf("The atomic counter is %u\n", acnt);
+  printf("The non-atomic counter is %u\n", cnt);
+}
+EOF
+}
+
+create_make_test_files() {
+  cat << EOF > /tmp/${MAKE_TEST_FILE}
+default:
+$(printf '\t')@echo 'Hello world!'
+EOF
+}
+
+echo '=== Docker Build Test ==='
+
+# Create temporary dir (if needed)
+if ! [ -d /tmp ]; then
+  mkdir -m 1777 /tmp
+fi
+
+printf '[TEST] Creating the test files... '
+create_gcc_test_files
+create_glibc_test_files
+create_make_test_files
+#create_bison_test_files
+echo 'DONE'
+
+printf '[TEST] Check if Binutils were installed... '
+if ld --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 1
+fi
+
+printf '[TEST] Check if GCC is installed... '
+if gcc --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 2
+fi
+
+printf '[TEST] Check if GLibC is installed... '
+_libc_so_="$(readlink -f -n "$(gcc --print-file-name=libc.so.6)")"
+_ld_so_="$(readlink -f -n "$(gcc --print-file-name=ld-linux-x86-64.so.2)")"
+if (${_ld_so_} 2>&1 | grep -q Usage && ${_libc_so_} --version && locale --version) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 3
+fi
+
+printf '[TEST] Check if M4 is installed... '
+if m4 --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 4
+fi
+
+printf '[TEST] Check if Make is installed... '
+if make --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 6
+fi
+
+printf '[TEST] Check if Libtool is installed... '
+if libtool --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 8
+fi
+
+printf '[TEST] Check if GCC can compile... '
+if (gcc -o /tmp/gcc_test /tmp/${GCC_TEST_FILE} && /tmp/gcc_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 12
+fi
+
+printf '[TEST] Check if G++ can compile... '
+if (g++ -o /tmp/gxx_test /tmp/${GCC_TEST_FILE} && /tmp/gxx_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 13
+fi
+
+printf '[TEST] Check if GLibC can be used... '
+if (gcc -pthread -o /tmp/glibc_test /tmp/${GLIBC_TEST_FILE} && /tmp/glibc_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 14
+fi
+
+printf '[TEST] Check if M4 can be used... '
+if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q fscm) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 15
+fi
+
+printf '[TEST] Check if Make can be used... '
+if (make -C /tmp) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 17
+fi
+
+printf '[TEST] Check if Libtool can be used... '
+if (libtool --quiet --mode=compile --tag=CC cc -c /tmp/${GCC_TEST_FILE} -o /tmp/libtool_test.o && libtool --quiet --mode=link --tag=CC cc /tmp/libtool_test.o -o /tmp/libtool_test && libtool execute /tmp/libtool_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 18
+fi
+
+printf '[TEST] Check if Busybox is installed... '
+if busybox > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 20
+fi
+
+exit 0
