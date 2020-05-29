@@ -1,10 +1,17 @@
 #echo "--- Loading config.site for ${PACKAGE_NAME:-unknown} ---"
 
+__DCACHE_LINESIZE__="${__DCACHE_LINESIZE__:-64}"
 __PREFIX__="${__PREFIX__:-/usr/local}"
 
-CFLAGS="-O2 -s -w -pipe -m64 -mtune=generic -fuse-ld=gold"
+CFLAGS="-O2 -g0 -s -w -pipe -m64 -mtune=generic -DNDEBUG -DCLS=${__DCACHE_LINESIZE__}"
 CPPFLAGS="${CFLAGS}"
 CXXFLAGS="${CFLAGS}"
+CFLAGS_FOR_BUILD="${CFLAGS}"
+CPPFLAGS_FOR_BUILD="${CFLAGS}"
+CXXFLAGS_FOR_BUILD="${CFLAGS}"
+CFLAGS_FOR_TARGET="${CFLAGS}"
+CPPFLAGS_FOR_TARGET="${CFLAGS}"
+CXXFLAGS_FOR_TARGET="${CFLAGS}"
 LIBTOOLFLAGS="--quiet"
 
 SED="sed"
