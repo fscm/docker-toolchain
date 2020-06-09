@@ -63,6 +63,7 @@ RUN \
   echo '=== instaling dependencies ===' && \
   time { \
     yum --assumeyes --quiet --enablerepo=PowerTools install \
+      autoconf \
       binutils \
       bison \
       byacc \
@@ -411,6 +412,8 @@ RUN \
     curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/libtool/libtool-${LIBTOOL_VERSION}.tar.xz" \
       | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libtool" && \
     cd "${__SOURCE_DIR__}/libtool/_build" && \
+    sed -i.orig -e "/sys_lib_dlsearch_path_spec=.*\$lt_ld_extra/ s,=.*,=\"${__PREFIX__}/lib64 /usr/local/lib64 /usr/lib64 /lib64 /usr/local/lib /usr/lib /lib\"," ../m4/libtool.m4 && \
+    autoreconf '../' && \
     ../configure \
       --quiet \
       --with-sysroot \
