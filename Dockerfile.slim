@@ -257,7 +257,7 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/gcc/_build_libstdc" ; \
   } && \
-# zlib
+# zlib # <- create test
   echo '=== installing zlib ===' && \
   time { \
     install --directory "${__SOURCE_DIR__}/zlib/_build" && \

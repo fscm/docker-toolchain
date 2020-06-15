@@ -88,7 +88,6 @@ printf '[TEST] Creating the test files... '
 create_gcc_test_files
 create_glibc_test_files
 create_make_test_files
-#create_bison_test_files
 echo 'DONE'
 
 printf '[TEST] Check if Binutils were installed... '
