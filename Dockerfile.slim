@@ -39,7 +39,7 @@ RUN \
   echo '=== setting build env ===' && \
   time { \
     set +h && \
-    export __DCACHE_LINESIZE__="$(getconf LEVEL1_DCACHE_LINESIZE)"
+    export __DCACHE_LINESIZE__="$(getconf LEVEL1_DCACHE_LINESIZE)" && \
     export __GNU_BUILD_TYPE__='x86_64-build-linux-gnu' && \
     export __NPROC__="$(getconf _NPROCESSORS_ONLN || echo 1)" && \
     export __PKG_VERSION__="fscm-$(date +%Y.%m.%d)" && \
@@ -64,6 +64,7 @@ RUN \
   time { \
     yum --assumeyes --quiet --enablerepo=PowerTools install \
       autoconf \
+      automake \
       binutils \
       bison \
       byacc \
