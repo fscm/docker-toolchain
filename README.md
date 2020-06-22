@@ -5,6 +5,8 @@ An image with some of the GNU toolchain tools and libraries.
 ## Supported tags
 
 - `0.0.1`, `latest`
+- `slim`, `0.0.2-slim`
+- `full`, `0.0.2-full`, `0.0.2`, `latest`
 
 ## What is a Toolchain?
 
@@ -16,18 +18,29 @@ An image with some of the GNU toolchain tools and libraries.
 
 The image contains some of the GNU toolchain tools and libraries like:
 
+- Attr
 - Autoconf
 - Automake
-- Binutils
+- Binutils _(1)_
 - Bison
-- C Library (glibc)
+- BZip2
+- C Library (glibc) _(1)_
+- Expat
 - Gettext
-- GCC
-- Libtool
-- M4
-- Make
+- GCC _(1)_
+- Libevent
+- Libtool _(1)_
+- Libuv
+- M4 _(1)_
+- Make _(1)_
 - Ncurses
+- OpenSSL
 - Patch
+- Perl
+- Zlib _(1)_
+
+The tools and libraries marked with a _(1)_ are the only ones present on the
+`slim` variant of The Docker image.
 
 ## Getting Started
 

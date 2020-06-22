@@ -7,21 +7,32 @@ Docker image with some of the GNU toolchain tools.
 This script will create a Docker image with some of the GNU toolchain tools
 and libraries like:
 
+- Attr
 - Autoconf
 - Automake
-- Binutils
+- Binutils _(1)_
 - Bison
-- C Library (glibc)
+- BZip2
+- C Library (glibc) _(1)_
+- Expat
 - Gettext
-- GCC
-- Libtool
-- M4
-- Make
+- GCC _(1)_
+- Libevent
+- Libtool _(1)_
+- Libuv
+- M4 _(1)_
+- Make _(1)_
 - Ncurses
+- OpenSSL
 - Patch
+- Perl
+- Zlib _(1)_
 
 The Docker image resulting from this script can either be used to run any of
 those tools or as a "source" to include those tools on another Docker image.
+
+The tools and libraries marked with a _(1)_ are the only ones present on the
+`slim` variant of The Docker image.
 
 ## Getting Started
 
@@ -39,22 +50,23 @@ Docker installation instructions can be found
 
 ### Usage
 
-In order to create a Docker image using this Dockerfile you need to run the
+In order to create a Docker image using this Dockerfiles you need to run the
 `docker` command with a few options.
 
 ```
-docker image build --force-rm --no-cache --quiet --tag <USER>/<IMAGE>:<TAG> <PATH>
+docker image build --force-rm --no-cache --quiet --file Dockerfile.<VARIANT> --tag <USER>/<IMAGE>:<TAG> <PATH>
 ```
 
 * `<USER>` - *[required]* The user that will own the container image (e.g.: "johndoe").
 * `<IMAGE>` - *[required]* The container name (e.g.: "unbound").
 * `<TAG>` - *[required]* The container tag (e.g.: "latest").
 * `<PATH>` - *[required]* The location of the Dockerfile folder.
+* `<VARIANT>` - *[required]* The variant that is being build (`slim` or `full`). The `full` variant requires the `slim` variant image.
 
 A build example:
 
 ```
-docker image build --force-rm --no-cache --quiet --tag johndoe/my_toolchain:latest .
+docker image build --force-rm --no-cache --quiet --file Dockerfile.slim --tag johndoe/my_toolchain:slim .
 ```
 
 To clean any _<none>_ image(s) left by the build process the following
