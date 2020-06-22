@@ -39,12 +39,14 @@ RUN \
   echo '=== setting build env ===' && \
   time { \
     set +h && \
+    ln --symbolic --force "${__WORK_DIR__}/busybox" "/usr/bin/sh" && \
     export __DCACHE_LINESIZE__="$(getconf LEVEL1_DCACHE_LINESIZE)" && \
     export __GNU_BUILD_TYPE__='x86_64-build-linux-gnu' && \
     export __NPROC__="$(getconf _NPROCESSORS_ONLN || echo 1)" && \
     export __PKG_VERSION__="fscm-$(date +%Y.%m.%d)" && \
     export CONFIG_SITE="${__WORK_DIR__}/autoconf/config.site" ; \
-    export MAKEFLAGS="--silent --output-sync --no-print-directory --jobs ${__NPROC__}" && \
+    #export MAKEFLAGS="--silent --output-sync --no-print-directory --jobs ${__NPROC__}" && \
+    export MAKEFLAGS="--silent --no-print-directory --jobs ${__NPROC__}" && \
     export TIMEFORMAT='=== time taken: %lR' ; \
   } && \
 # build structure
