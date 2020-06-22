@@ -12,13 +12,19 @@
 #
 
 # Variables
+AUTOCONF_TEST_FILE="configure.ac"
+AUTOMAKE_TEST_FILE="Makefile.am"
 BISON_TEST_FILE="bison.y"
+BZIP2_TEST_FILE="bzip2.txt"
 GCC_TEST_FILE="gcc.c"
 GXX_TEST_FILE="gxx.cc"
 GLIBC_TEST_FILE="glibc.c"
+LIBEVENT_TEST_FILE="libevent.c"
+LIBEXPAT_TEST_FILE="expat.c"
+LIBFFI_TEST_FILE="libffi.c"
+LIBUV_TEST_FILE="libuv.c"
 MAKE_TEST_FILE="Makefile"
-
-__LIB_DIR__="$(dirname $(readlink -f -n $(gcc --print-file-name=libc.so)))"
+PERL_TEST_FILE="perl.pl"
 
 
 # Functions
@@ -105,6 +111,112 @@ int main() { yyparse(); }
 EOF
 }
 
+create_bzip2_test_files() {
+  cat << EOF > /tmp/${BZIP2_TEST_FILE}
+Hello BZip2!
+EOF
+}
+
+create_perl_test_files() {
+  cat << EOF > /tmp/${PERL_TEST_FILE}
+print 'Hello Perl!';
+EOF
+}
+
+create_autoconf_test_files() {
+  cat << EOF > /tmp/${AUTOCONF_TEST_FILE}
+AC_INIT(auto_test, 1.0)
+AM_INIT_AUTOMAKE
+AC_PROG_CC
+AC_CONFIG_FILES(Makefile)
+AC_OUTPUT
+EOF
+}
+
+create_automake_test_files() {
+  cat << EOF > /tmp/${AUTOMAKE_TEST_FILE}
+bin_PROGRAMS = auto_test
+auto_test_SOURCES = ${GCC_TEST_FILE}
+EOF
+}
+
+create_libffi_test_files() {
+  cat << EOF > /tmp/${LIBFFI_TEST_FILE}
+#include <stdio.h>
+#include <ffi.h>
+void puts_binding(ffi_cif *cif, unsigned int *ret, void* args[], FILE *stream) {
+  *ret = fputs(*(char **)args[0], stream);
+}
+int main() {
+  ffi_cif cif;
+  ffi_type *args[1];
+  ffi_closure *closure;
+  int (*bound_puts)(char *);
+  int rc;
+  closure = ffi_closure_alloc(sizeof(ffi_closure), &bound_puts);
+  if (closure) {
+    args[0] = &ffi_type_pointer;
+    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_uint, args) == FFI_OK) {
+      if (ffi_prep_closure_loc(closure, &cif, puts_binding, stdout, bound_puts) == FFI_OK) {
+        rc = bound_puts("Hello World!");
+      }
+    }
+  }
+  ffi_closure_free(closure);
+  return 0;
+}
+EOF
+}
+
+create_libevent_test_files() {
+  cat << EOF > /tmp/${LIBEVENT_TEST_FILE}
+#include <event2/event.h>
+int main() {
+  struct event_base *base;
+  base = event_base_new();
+  event_base_free(base);
+  return 0;
+}
+EOF
+}
+
+create_libuv_test_files() {
+  cat << EOF > /tmp/${LIBUV_TEST_FILE}
+#include <uv.h>
+#include <stdlib.h>
+int main() {
+  uv_loop_t* loop = malloc(sizeof *loop);
+  uv_loop_init(loop);
+  uv_loop_close(loop);
+  free(loop);
+  return 0;
+}
+EOF
+}
+
+create_expat_test_files() {
+  cat << EOF > /tmp/${LIBEXPAT_TEST_FILE}
+#include <stdio.h>
+#include "expat.h"
+static void XMLCALL my_StartElementHandler(void *userdata, const XML_Char *name, const XML_Char **atts) {
+  printf("tag:%s|", name);
+}
+static void XMLCALL my_CharacterDataHandler(void *userdata, const XML_Char *s, int len) {
+  printf("data:%.*s|", len, s);
+}
+int main() {
+  static const char str[] = "<str>Hello Expat!</str>";
+  int result;
+  XML_Parser parser = XML_ParserCreate("utf-8");
+  XML_SetElementHandler(parser, my_StartElementHandler, NULL);
+  XML_SetCharacterDataHandler(parser, my_CharacterDataHandler);
+  result = XML_Parse(parser, str, sizeof(str), 1);
+  XML_ParserFree(parser);
+  return result;
+}
+EOF
+}
+
 echo '=== Docker Build Test ==='
 
 # Create temporary dir (if needed)
@@ -115,8 +227,16 @@ fi
 printf '[TEST] Creating the test files... '
 create_gcc_test_files
 create_glibc_test_files
-create_make_test_files
+#create_make_test_files
 create_bison_test_files
+create_bzip2_test_files
+create_perl_test_files
+create_autoconf_test_files
+create_automake_test_files
+create_libffi_test_files
+create_libevent_test_files
+create_libuv_test_files
+create_expat_test_files
 echo 'DONE'
 
 printf '[TEST] Check if Binutils were installed... '
@@ -136,7 +256,9 @@ else
 fi
 
 printf '[TEST] Check if GLibC is installed... '
-if (${__LIB_DIR__}/ld-*.so 2>&1 | grep -q Usage && ${__LIB_DIR__}/libc-*.so --version && locale --version) > /dev/null 2>&1; then
+_libc_so_="$(readlink -f -n "$(gcc --print-file-name=libc.so.6)")"
+_ld_so_="$(readlink -f -n "$(gcc --print-file-name=ld-linux-x86-64.so.2)")"
+if (${_ld_so_} 2>&1 | grep -q Usage && ${_libc_so_} --version && locale --version) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
@@ -151,28 +273,12 @@ else
   exit 4
 fi
 
-printf '[TEST] Check if Gettext is installed... '
-if gettext --version > /dev/null 2>&1; then
-  echo 'OK'
-else
-  echo 'Failed'
-  exit 5
-fi
-
 printf '[TEST] Check if Make is installed... '
 if make --version > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 6
-fi
-
-printf '[TEST] Check if Patch is installed... '
-if patch --version > /dev/null 2>&1; then
-  echo 'OK'
-else
-  echo 'Failed'
-  exit 7
+  exit 5
 fi
 
 printf '[TEST] Check if Libtool is installed... '
@@ -180,7 +286,39 @@ if libtool --version > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
+  exit 6
+fi
+
+printf '[TEST] Check if Gettext is installed... '
+if gettext --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 7
+fi
+
+printf '[TEST] Check if BZip2 is installed... '
+if bzip2 --help > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
   exit 8
+fi
+
+printf '[TEST] Check if Perl is installed... '
+if perl --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 9
+fi
+
+printf '[TEST] Check if Patch is installed... '
+if patch --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 10
 fi
 
 printf '[TEST] Check if Autoconf is installed... '
@@ -188,23 +326,47 @@ if autoconf --version > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 9
+  exit 11
 fi
 
-#printf '[TEST] Check if Automake is installed... '
-#if automake --version > /dev/null 2>&1; then
-#  echo 'OK'
-#else
-#  echo 'Failed'
-#  exit 10
-#fi
+printf '[TEST] Check if Automake is installed... '
+if automake --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 12
+fi
 
 printf '[TEST] Check if Bison is installed... '
 if bison --version > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 11
+  exit 13
+fi
+
+printf '[TEST] Check if Patch is installed... '
+if patch --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 14
+fi
+
+printf '[TEST] Check if Expat is installed... '
+if xmlwf -v > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 15
+fi
+
+printf '[TEST] Check if OpenSSL is installed... '
+if openssl version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 16
 fi
 
 printf '[TEST] Check if GCC can compile... '
@@ -212,7 +374,7 @@ if (gcc -o /tmp/gcc_test /tmp/${GCC_TEST_FILE} && /tmp/gcc_test) > /dev/null 2>&
   echo 'OK'
 else
   echo 'Failed'
-  exit 12
+  exit 17
 fi
 
 printf '[TEST] Check if G++ can compile... '
@@ -220,7 +382,7 @@ if (g++ -o /tmp/gxx_test /tmp/${GCC_TEST_FILE} && /tmp/gxx_test) > /dev/null 2>&
   echo 'OK'
 else
   echo 'Failed'
-  exit 13
+  exit 18
 fi
 
 printf '[TEST] Check if GLibC can be used... '
@@ -228,7 +390,7 @@ if (gcc -pthread -o /tmp/glibc_test /tmp/${GLIBC_TEST_FILE} && /tmp/glibc_test) 
   echo 'OK'
 else
   echo 'Failed'
-  exit 14
+  exit 19
 fi
 
 printf '[TEST] Check if M4 can be used... '
@@ -236,7 +398,7 @@ if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q fscm) > /dev/null 2>&1; t
   echo 'OK'
 else
   echo 'Failed'
-  exit 15
+  exit 20
 fi
 
 printf '[TEST] Check if Gettext can be used... '
@@ -244,15 +406,48 @@ if (gettext test) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 16
+  exit 21
 fi
 
-printf '[TEST] Check if Make can be used... '
-if (make -C /tmp) > /dev/null 2>&1; then
+printf '[TEST] Check if BZip2 can be used... '
+if (bzip2 --keep "/tmp/${BZIP2_TEST_FILE}" && mv "/tmp/${BZIP2_TEST_FILE}" "/tmp/${BZIP2_TEST_FILE}.orig" && bunzip2 "/tmp/${BZIP2_TEST_FILE}.bz2" && cmp -s "/tmp/${BZIP2_TEST_FILE}.orig" "/tmp/${BZIP2_TEST_FILE}") > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 17
+  exit 22
+fi
+
+printf '[TEST] Check if Perl can be used... '
+if (perl "/tmp/${PERL_TEST_FILE}") > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 23
+fi
+
+printf '[TEST] Check if Automake can be used... '
+if (cd /tmp && aclocal && automake --add-missing --foreign) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 24
+fi
+
+printf '[TEST] Check if Autoconf can be used... '
+if (cd /tmp && autoconf && ./configure --quiet) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 25
+fi
+
+printf '[TEST] Check if Make can be used... '
+#if (make -C /tmp) > /dev/null 2>&1; then
+if (cd /tmp && make && ./auto_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 26
 fi
 
 printf '[TEST] Check if Libtool can be used... '
@@ -260,7 +455,7 @@ if (libtool --quiet --mode=compile --tag=CC cc -c /tmp/${GCC_TEST_FILE} -o /tmp/
   echo 'OK'
 else
   echo 'Failed'
-  exit 18
+  exit 27
 fi
 
 printf '[TEST] Check if Bison can be used... '
@@ -268,7 +463,47 @@ if (bison --output=/tmp/bison_test.c /tmp/${BISON_TEST_FILE} && g++ -o /tmp/biso
   echo 'OK'
 else
   echo 'Failed'
-  exit 19
+  exit 28
+fi
+
+printf '[TEST] Check if Expat (libexpat) can be used... '
+if (gcc -lexpat -o /tmp/libexpat_test /tmp/${LIBEXPAT_TEST_FILE} && /tmp/libexpat_test | grep -q '^tag:str|data:Hello Expat!|$') > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 29
+fi
+
+printf '[TEST] Check if OpenSSL (and Root Certificates) can be used... '
+if (echo | openssl s_client -connect google.com:443 2>&1) | grep -q 'Verify return code: 0 (ok)'; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 30
+fi
+
+printf '[TEST] Check if Libffi can be used... '
+if (gcc -lffi -o /tmp/libffi_test /tmp/${LIBFFI_TEST_FILE} && /tmp/libffi_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 31
+fi
+
+printf '[TEST] Check if Libevent can be used... '
+if (gcc -levent -o /tmp/libevent_test /tmp/${LIBEVENT_TEST_FILE} && /tmp/libevent_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 32
+fi
+
+printf '[TEST] Check if Libuv can be used... '
+if (gcc -luv -o /tmp/libuv_test /tmp/${LIBUV_TEST_FILE} && /tmp/libuv_test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 33
 fi
 
 printf '[TEST] Check if Busybox is installed... '
@@ -276,7 +511,7 @@ if busybox > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 20
+  exit 34
 fi
 
 exit 0
