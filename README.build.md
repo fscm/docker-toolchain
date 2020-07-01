@@ -1,11 +1,10 @@
 # GNU Toolchain for Docker
 
-Docker image with some of the GNU toolchain tools.
+Docker image with a GNU base Toolchain.
 
 ## Synopsis
 
-This script will create a Docker image with some of the GNU toolchain tools
-and libraries like:
+This script will create a Docker image with the following tools and libraries:
 
 - Attr
 - Autoconf
@@ -17,8 +16,10 @@ and libraries like:
 - Expat
 - Gettext
 - GCC _(1)_
+- GDBM
 - Libevent
 - Libtool _(1)_
+- Libuuid
 - Libuv
 - M4 _(1)_
 - Make _(1)_
@@ -26,6 +27,11 @@ and libraries like:
 - OpenSSL
 - Patch
 - Perl
+- Pkg-config _(1)_
+- Python3
+- Readline
+- SQLite
+- Xz
 - Zlib _(1)_
 
 The Docker image resulting from this script can either be used to run any of

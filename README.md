@@ -1,12 +1,14 @@
 # GNU Toolchain for Docker
 
-An image with some of the GNU toolchain tools and libraries.
+An image with a GNU base Toolchain.
 
 ## Supported tags
 
 - `0.0.1`, `latest`
-- `slim`, `0.0.2-slim`
-- `full`, `0.0.2-full`, `0.0.2`, `latest`
+- `0.0.2-slim`
+- `0.0.2-full`, `0.0.2`
+- `0.0.3-slim`, `slim`
+- `0.0.3-full`, `0.0.3`, `full`, `latest`
 
 ## What is a Toolchain?
 
@@ -16,7 +18,7 @@ An image with some of the GNU toolchain tools and libraries.
 
 ## What is included?
 
-The image contains some of the GNU toolchain tools and libraries like:
+The image contains the following tools and libraries:
 
 - Attr
 - Autoconf
@@ -28,8 +30,10 @@ The image contains some of the GNU toolchain tools and libraries like:
 - Expat
 - Gettext
 - GCC _(1)_
+- GDBM
 - Libevent
 - Libtool _(1)_
+- Libuuid
 - Libuv
 - M4 _(1)_
 - Make _(1)_
@@ -37,6 +41,11 @@ The image contains some of the GNU toolchain tools and libraries like:
 - OpenSSL
 - Patch
 - Perl
+- Pkg-config _(1)_
+- Python3
+- Readline
+- SQLite
+- Xz
 - Zlib _(1)_
 
 The tools and libraries marked with a _(1)_ are the only ones present on the
