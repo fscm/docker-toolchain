@@ -132,6 +132,14 @@ else
   exit 6
 fi
 
+printf '[TEST] Check if Pkg-config is installed... '
+if pkg-config --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 7
+fi
+
 printf '[TEST] Check if Libtool is installed... '
 if libtool --version > /dev/null 2>&1; then
   echo 'OK'
@@ -165,7 +173,7 @@ else
 fi
 
 printf '[TEST] Check if M4 can be used... '
-if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q fscm) > /dev/null 2>&1; then
+if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q 'fscm') > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'

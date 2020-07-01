@@ -17,6 +17,8 @@ ARG KERNEL_VERSION="5.6.14"
 ARG LIBTOOL_VERSION="2.4.6"
 ARG M4_VERSION="1.4.18"
 ARG MAKE_VERSION="4.3"
+ARG PKG_CONFIG_VERSION="0.29.2"
+ARG TZDATA_VERSION="2020a"
 ARG ZLIB_VERSION="1.2.11"
 ARG __SOURCE_DIR__="${__WORK_DIR__}/src"
 ARG __USER__="root"
@@ -88,7 +90,6 @@ RUN \
       m4 \
       make \
       patch \
-      perl-Thread-Queue \
       python3-devel \
       rsync \
       sed \
@@ -225,7 +226,7 @@ RUN \
       --disable-debug \
       --disable-nscd \
       --disable-profile \
-      --disable-timezone-tools \
+      #--disable-timezone-tools \
       --disable-werror && \
     make > /dev/null && \
     make install > /dev/null && \
@@ -268,7 +269,6 @@ RUN \
       | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/zlib" && \
     cd "${__SOURCE_DIR__}/zlib/_build" && \
     sed -i.orig -e "/^mandir=/ s,=.*,='\${prefix}/_delete_/share/man'," ../configure && \
-    sed -i.orig -e "/^pkgconfigdir =/ s,= .*,= \${prefix}/_delete_/pkgconfig," ../Makefile.in && \
     AR="${__GNU_BUILD_TYPE__}-ar" \
     CC="${__GNU_BUILD_TYPE__}-gcc" \
     RANLIB="${__GNU_BUILD_TYPE__}-ranlib" \
@@ -371,6 +371,32 @@ RUN \
     find "${__BUILD_DIR__}${__PREFIX__}" -depth -type d -name "${__GNU_BUILD_TYPE__}" -exec rm -rf '{}' + && \
     find "${__BUILD_DIR__}${__PREFIX__}" -depth -type f -name "${__GNU_BUILD_TYPE__}*" -delete ; \
   } && \
+# tzdata # <- create test
+  echo '=== installing tzdata ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/tzdata" && \
+    curl --silent --location --retry 3 "https://data.iana.org/time-zones/releases/tzdata${TZDATA_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=0 -C "${__SOURCE_DIR__}/tzdata" && \
+    curl --silent --location --retry 3 "https://data.iana.org/time-zones/releases/tzcode${TZDATA_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=0 -C "${__SOURCE_DIR__}/tzdata" && \
+    cd "${__SOURCE_DIR__}/tzdata" && \
+    make VERSION="${TZDATA_VERSION}" tzdata${TZDATA_VERSION}-rearguard.tar.gz && \
+    tar xz --no-same-owner -f "tzdata${TZDATA_VERSION}-rearguard.tar.gz" && \
+    rm -f 'tzdata.zi' && \
+    make VERSION="${TZDATA_VERSION}" DATAFORM='rearguard' tzdata.zi && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo/posix" && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo/right" && \
+    _zones_='africa antarctica asia australasia europe northamerica southamerica' && \
+    zic -L '/dev/null' -d "${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo" -p 'America/New_York' ${_zones_} && \
+    zic -L '/dev/null' -d "${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo/posix" ${_zones_} && \
+    zic -L 'leapseconds' -d "${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo/right" ${_zones_} && \
+    unset _zones_ && \
+    install --owner="${__USER__}" --group="${__USER__}" --mode=0644 --target-directory="${__BUILD_DIR__}${__PREFIX__}/share/zoneinfo" iso3166.tab zone.tab zone1970.tab leapseconds tzdata.zi && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/tzdata" && \
+    (find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/tzdata" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/tzdata" ; \
+  } && \
 # m4
   echo '=== installing m4 ===' && \
   time { \
@@ -407,6 +433,31 @@ RUN \
     (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/make" ';') && \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/make" ; \
+  } && \
+# pkgconfig # <- create test
+  echo '=== installing pkgconfig ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/pkg-config/_build" && \
+    curl --silent --location --retry 3 "https://pkg-config.freedesktop.org/releases/pkg-config-${PKG_CONFIG_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/pkg-config" && \
+    cd "${__SOURCE_DIR__}/pkg-config/_build" && \
+    ../configure \
+      --quiet \
+      --with-internal-glib \
+      --with-pc-path="${__PREFIX__}/lib64/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/lib64/pkgconfig:/lib/pkgconfig" \
+      --with-system-include-path="${__PREFIX__}/include" \
+      --with-system-library-path="${__PREFIX__}/lib64" \
+      --enable-shared \
+      --enable-silent-rules \
+      --enable-static \
+      --disable-debug \
+      --disable-host-tool && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/pkg-config" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/pkg-config" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/pkg-config" ; \
   } && \
 # libtool
   echo '=== installing libtool ===' && \
