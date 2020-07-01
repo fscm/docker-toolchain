@@ -16,14 +16,21 @@ ARG AUTOMAKE_VERSION="1.16.2"
 ARG BISON_VERSION="3.6.3"
 ARG BZIP2_VERSION="1.0.8"
 ARG EXPAT_VERSION="2.2.9"
+ARG GDBM_VERSION="1.18.1"
 ARG GETTEXT_VERSION="0.20.2"
 ARG LIBEVENT_VERSION="2.1.11"
 ARG LIFFI_VERSION="3.3"
+#ARG LIBUUID_VERSION="1.6.2"
+ARG LIBUUID_VERSION="1.0.3"
 ARG LIBUV_VERSION="1.38.0"
 ARG NCURSES_VERSION="6.2"
 ARG OPENSSL_VERSION="1.1.1g"
 ARG PATCH_VERSION="2.7.6"
 ARG PERL_VERSION="5.30.3"
+ARG PYTHON3_VERSION="3.8.3"
+ARG READLINE_VERSION="8.0"
+ARG SQLITE_VERSION="3320300"
+ARG XZ_VERSION="5.2.5"
 ARG __SOURCE_DIR__="${__WORK_DIR__}/src"
 ARG __USER__="root"
 
@@ -51,7 +58,8 @@ RUN \
     export __NPROC__="$(getconf _NPROCESSORS_ONLN || echo 1)" && \
     export __PKG_VERSION__="fscm-$(date +%Y.%m.%d)" && \
     export CONFIG_SITE="${__WORK_DIR__}/autoconf/config.site" ; \
-    export MAKEFLAGS="--silent --output-sync --no-print-directory --jobs ${__NPROC__}" && \
+    #export MAKEFLAGS="--silent --output-sync --no-print-directory --jobs ${__NPROC__}" && \
+    export MAKEFLAGS="--silent --no-print-directory --jobs ${__NPROC__}" && \
     export TIMEFORMAT='=== time taken: %lR (s:%lS u:%lU)' ; \
   } && \
 # build structure
@@ -78,7 +86,6 @@ RUN \
       flex \
       gawk \
       gzip \
-      #python3 \
       sed \
       tar \
       wget \
@@ -99,7 +106,6 @@ RUN \
       --with-cxx-shared \
       --with-manpage-format=normal \
       --with-ospeed=unsigned \
-      --with-pkg-config-libdir="${__PREFIX__}/_delete_/pkgconfig" \
       --with-shared \
       --with-terminfo-dirs="/etc/terminfo:${__PREFIX__}/share/terminfo" \
       --with-termlib=tinfo \
@@ -111,10 +117,10 @@ RUN \
       --without-tests \
       --enable-colorfgbg \
       --enable-hard-tabs \
+      --enable-pc-files \
       --enable-xmc-glitch \
       --enable-widec \
       --disable-overwrite \
-      --disable-pc-files \
       --disable-termcap \
       --disable-wattr-macros && \
     make libs > /dev/null && \
@@ -128,6 +134,27 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/ncurses" ; \
   } && \
+# readline
+  echo '=== installing readline ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/readline/_build" && \
+    curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/readline/readline-${READLINE_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/readline" && \
+    cd "${__SOURCE_DIR__}/readline/_build" && \
+    ../configure \
+      --quiet \
+      --with-curses \
+      --enable-multibyte \
+      --enable-shared \
+      --enable-static \
+      --disable-install-examples && \
+    make SHLIB_LIBS='-lncursesw' > /dev/null && \
+    make SHLIB_LIBS='-lncursesw' install > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/readline" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/readline" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/readline" ; \
+  } && \
 # gettext
   echo '=== installing gettext ===' && \
   time { \
@@ -140,13 +167,13 @@ RUN \
       --with-pic \
       --with-included-gettext \
       --without-emacs \
-      --enable-nls \
       --enable-shared \
       --enable-static \
       --disable-acl \
       --disable-csharp \
       --disable-java \
       --disable-native-java \
+      --disable-nls \
       --disable-rpath && \
     make > /dev/null && \
     make install-strip EXAMPLESFILES="" > /dev/null && \
@@ -178,6 +205,29 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/bzip2" ; \
   } && \
+# gdbm
+echo '=== installing gdbm ===' && \
+time { \
+  install --directory "${__SOURCE_DIR__}/gdbm/_build" && \
+  curl --silent --location --retry 3 "https://ftp.gnu.org/gnu/gdbm/gdbm-${GDBM_VERSION}.tar.gz" \
+    | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/gdbm" && \
+  cd "${__SOURCE_DIR__}/gdbm/_build" && \
+  sed -i.orig -e '/^char.*parseopt_program_\(doc\|args\)/d' ../src/parseopt.c && \
+  ../configure \
+    --quiet \
+    --enable-libgdbm-compat \
+    --enable-shared \
+    --enable-silent-rules \
+    --enable-static \
+    --disable-nls \
+    --disable-rpath && \
+  make > /dev/null && \
+  make install-strip > /dev/null && \
+  install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/gdbm" && \
+  (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/gdbm" ';') && \
+  cd ~- && \
+  rm -rf "${__SOURCE_DIR__}/gdbm" ; \
+} && \
 # perl
   echo '=== installing perl ===' && \
   time { \
@@ -223,7 +273,7 @@ RUN \
       -Dsitelib="${__PREFIX__}/share/perl${PERL_VERSION%%.*}/site" \
       -Dsiteprefix="${__PREFIX__}" \
       -Ubincompat5005 \
-      -Dstartperl="#!${__PREFIX__}/bin/perl" \
+      -Dstartperl='#!'"${__PREFIX__}/bin/perl" \
       -Duse64bitint \
       -Duseithreads \
       -Duselargefiles \
@@ -239,10 +289,7 @@ RUN \
     unset BUILD_BZIP2 && \
     unset BZIP2_LIB && \
     unset BZIP2_INCLUDE && \
-    #for i in asm/termios.h syscall.h syslimits.h syslog.h sys/ioctl.h sys/socket.h sys/time.h wait.h; do perl /usr/local/toolchain/bin/h2ph -a -d /usr/local/toolchain/lib64/perl5/core $i > /dev/null || true; done && \
-    #PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install Data::Dumper' && \
-    #PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install Getopt::Long' && \
-    #PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install Thread::Queue' && \
+    for header in asm/termios.h syscall.h syslimits.h syslog.h sys/ioctl.h sys/socket.h sys/time.h wait.h; do h2ph -a -d "${__PREFIX__}/lib64/perl${PERL_VERSION%%.*}/core" ${header} > /dev/null || true; done && \
     install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}${__PREFIX__}/lib64/perl${PERL_VERSION%%.*}/vendor/auto" && \
     install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__BUILD_DIR__}${__PREFIX__}/share/perl${PERL_VERSION%%.*}/vendor" && \
     mv "${__PREFIX__}/lib64/perl${PERL_VERSION%%.*}/core/CORE/libperl.so" "${__BUILD_DIR__}${__PREFIX__}/lib64/libperl.so.${PERL_VERSION}" && \
@@ -311,7 +358,6 @@ RUN \
     curl --silent --location --retry 3 "https://namesdir.com/mirrors/nongnu/attr/attr-${ATTR_VERSION}.tar.gz" \
       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/attr" && \
     cd "${__SOURCE_DIR__}/attr/_build" && \
-    sed -i.orig -e "/^pkgconfdir =/ s,= .*,= \$(prefix)/_delete_/pkgconfig," ../Makefile.in && \
     ../configure \
       --quiet \
       --enable-shared \
@@ -343,14 +389,13 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/patch" ; \
   } && \
-# expat # <- create test
+# expat
   echo '=== installing expat ===' && \
   time { \
     install --directory "${__SOURCE_DIR__}/expat/_build" && \
     curl --silent --location --retry 3 "https://prdownloads.sourceforge.net/expat/expat-${EXPAT_VERSION}.tar.xz" \
       | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/expat" && \
     cd "${__SOURCE_DIR__}/expat/_build" && \
-    sed -i.orig -e "/^pkgconfigdir =/ s,/pkgconfig,/../_delete_/pkgconfig," ../Makefile.in && \
     ../configure \
       --quiet \
       --without-docbook \
@@ -371,7 +416,6 @@ RUN \
     curl --silent --location --retry 3 "https://sourceware.org/pub/libffi/libffi-${LIFFI_VERSION}.tar.gz" \
       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libffi" && \
     cd "${__SOURCE_DIR__}/libffi/_build" && \
-    sed -i.orig -e "/^pkgconfigdir =/ s,/pkgconfig,/../_delete_/pkgconfig," ../Makefile.in && \
     ../configure \
       --quiet \
       --with-gcc-arch='x86-64' \
@@ -385,6 +429,48 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/libffi" ; \
   } && \
+# # libuuid # <- create test
+#   echo '=== installing libuuid ===' && \
+#   time { \
+#     install --directory "${__SOURCE_DIR__}/libuuid/_build" && \
+#     curl --silent --location --retry 3 "https://www.mirrorservice.org/sites/ftp.ossp.org/pkg/lib/uuid/uuid-${LIBUUID_VERSION}.tar.gz" \
+#       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libuuid" && \
+#     cd "${__SOURCE_DIR__}/libuuid/_build" && \
+#     ../configure \
+#       --quiet \
+#       --with-cxx \
+#       --with-dce \
+#       --with-perl \
+#       --with-perl-compat \
+#       --enable-shared \
+#       --enable-static && \
+#     make LIBTOOL="${__PREFIX__}/bin/libtool" INSTALLDIRS='vendor' > /dev/null && \
+#     make LIBTOOL="${__PREFIX__}/bin/libtool" INSTALLDIRS='vendor' install > /dev/null && \
+#     #perl -MData::UUID -e 'print "Testing compatibility of Data::UUID version $Data::UUID::VERSION\n";' && \
+#     install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/libuuid" && \
+#     (cd .. && find ./ -type f -name '*README*' -exec cp --parents {} "${__PREFIX__}/licenses/libuuid" ';') && \
+#     cd ~- && \
+#     rm -rf "${__SOURCE_DIR__}/libuuid" ; \
+#   } && \
+# libuuid # <- create test
+  echo '=== installing libuuid ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/libuuid/_build" && \
+    curl --silent --location --retry 3 "https://prdownloads.sourceforge.net/libuuid/libuuid-${LIBUUID_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libuuid" && \
+    cd "${__SOURCE_DIR__}/libuuid/_build" && \
+    ../configure \
+      --quiet \
+      --enable-shared \
+      --enable-silent-rules \
+      --enable-static && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/libuuid" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/libuuid" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/libuuid" ; \
+  } && \
 # openssl
   echo '=== installing openssl ===' && \
   time { \
@@ -392,7 +478,7 @@ RUN \
     curl --silent --location --retry 3 "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/openssl" && \
     cd "${__SOURCE_DIR__}/openssl/_build" && \
-    sed -i.orig -e 's,/share/,/_delete_/share/,g' -e '/pkgconfig/ s,/pkgconfig,/../_delete_/pkgconfig,g' ../Configurations/unix-Makefile.tmpl && \
+    sed -i.orig -e '/\(MAN\|DOC\)DIR=/ s,/share/,/_delete_/share/,g' ../Configurations/unix-Makefile.tmpl && \
     ../config \
       --prefix="${__PREFIX__}" \
       --libdir="${__PREFIX__}/lib64" \
@@ -415,6 +501,103 @@ RUN \
     cd ~- && \
     rm -rf "${__SOURCE_DIR__}/openssl" ; \
   } && \
+# xz
+  echo '=== installing xz ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/xz/_build" && \
+    curl --silent --location --retry 3 "https://tukaani.org/xz/xz-${XZ_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/xz" && \
+    cd "${__SOURCE_DIR__}/xz/_build" && \
+    ../configure \
+      --quiet \
+      --enable-shared \
+      --enable-silent-rules \
+      --enable-static \
+      --disable-debug \
+      --disable-doc \
+      --disable-lzmainfo \
+      --disable-nls \
+      --disable-rpath && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/xz" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/xz" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/xz" ; \
+  } && \
+# sqlite # <- create test
+  echo '=== installing sqlite ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/sqlite/_build" && \
+    curl --silent --location --retry 3 "https://sqlite.org/2020/sqlite-autoconf-${SQLITE_VERSION}.tar.gz" \
+      | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/sqlite" && \
+    cd "${__SOURCE_DIR__}/sqlite/_build" && \
+    ../configure \
+      --quiet \
+      --enable-dynamic-extensions \
+      --enable-readline \
+      --enable-session \
+      --enable-shared \
+      --enable-silent-rules \
+      --enable-static \
+      --disable-debug \
+      --disable-editline && \
+    make > /dev/null && \
+    make install-strip > /dev/null && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/sqlite" && \
+    (cd .. && find ./ -type f -a \( -iname '*LICENSE*' -o -name '*README*' \) -exec cp --parents {} "${__PREFIX__}/licenses/sqlite" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/sqlite" ; \
+  } && \
+# python3
+  echo '=== installing python3 ===' && \
+  time { \
+    install --directory "${__SOURCE_DIR__}/python3/_build" && \
+    curl --silent --location --retry 3 "https://www.python.org/ftp/python/${PYTHON3_VERSION}/Python-${PYTHON3_VERSION}.tar.xz" \
+      | tar xJ --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/python3" && \
+    cd "${__SOURCE_DIR__}/python3/_build" && \
+    rm -rf "../Modules/expat" && \
+    sed -i.orig -e 's,/lib/,/lib64/,g' ../Lib/distutils/command/install.py && \
+    sed -i.orig -e 's,"lib","lib64",g' ../Lib/distutils/sysconfig.py && \
+    sed -i.orig -e 's,"lib","lib64",g' ../Lib/distutils/tests/test_install.py && \
+    sed -i.orig -e 's,"lib","lib64",g' -e '/return/ s,lib/python,lib64/python,g' -e "/^PREFIXES =/ s|\]|, '${__PREFIX__}'\]|" ../Lib/site.py && \
+    sed -i.orig -e 's,/lib/,/lib64/,g' ../Lib/sysconfig.py && \
+    sed -i.orig -e "s,'lib','lib64',g" ../Lib/test/test_site.py && \
+    sed -i.orig -e '/^SCRIPTDIR=/ s/=.*/= @libdir@/' -e '/^LIBPL=/ s,=.*,= $(LIBDEST)/config-$(LDVERSION),' -e 's,lib/libpython,lib64/libpython,g' ../Makefile.pre.in && \
+    sed -i.orig -e 's,"lib/,"lib64/,g' ../Modules/getpath.c && \
+    sed -i.orig -e '/LIBPL=/ s,/lib/,/lib64/,' ../configure && \
+    sed -i.orig -e '/LIBPL=/ s,/lib/,/lib64/,' ../configure.ac && \
+    sed -i.orig -e "s,/lib',/lib64'," -e "s,/lib/,/lib64/," -e "/system_lib_dirs =/ s#\[#\['/usr/local/toolchain/lib64', #" -e "/system_include_dirs =/ s#\[#\['/usr/local/toolchain/include', #" -e "s,/usr/include/,${__PREFIX__}/include/,g" ../setup.py && \
+    sed -i.orig -e '/for file in py_files/ s/py_files/sorted(py_files)/' ../Lib/distutils/util.py && \
+    sed -i.orig -e '/deterministic parameter not supported/ s/3/10/' ../Lib/sqlite3/test/userfunctions.py && \
+    autoreconf --install --force '../' && \
+    ../configure \
+      --quiet \
+      --with-computed-gotos \
+      --with-ensurepip='install' \
+      --with-ssl-default-suites='openssl' \
+      --with-system-expat \
+      --with-system-ffi \
+      --without-dtrace \
+      --without-pydebug \
+      --enable-ipv6 \
+      --enable-loadable-sqlite-extensions \
+      --enable-optimizations \
+      --enable-shared && \
+    make > /dev/null && \
+    make install > /dev/null && \
+    find "${__BUILD_DIR__}${__PREFIX__}/lib64/python${PYTHON3_VERSION%.*}" -depth -type d -a \( -name test -o -name tests -o -name __pycache__ \) -exec rm -rf '{}' + && \
+    find "${__BUILD_DIR__}${__PREFIX__}/lib64/python${PYTHON3_VERSION%.*}" -depth -type f -a \( -name '*.pyc' -o -name '*.pyo' -o -name '*.bat' -o -name '*LICENSE*' \) -delete && \
+    for p in $(find "${__BUILD_DIR__}${__PREFIX__}/bin" -type f -name "*${PYTHON3_VERSION%.*}*"); do \
+      s="$(basename ${p})"; \
+      t="${__BUILD_DIR__}${__PREFIX__}/bin/$(echo ${s} | sed -e "s/\(\|-\)${PYTHON3_VERSION%.*}//")"; \
+      if [ ! -f "${t}" ]; then ln -s "${s}" "${t}"; fi; \
+    done && \
+    install --directory --owner="${__USER__}" --group="${__USER__}" --mode=0755 "${__PREFIX__}/licenses/python3" && \
+    (cd .. && find ./ -type f -a \( -name '*LICENSE*' -o -name '*COPYING*' \) -exec cp --parents {} "${__PREFIX__}/licenses/python3" ';') && \
+    cd ~- && \
+    rm -rf "${__SOURCE_DIR__}/python3" ; \
+  } && \
 # libevent
   echo '=== installing libevent ===' && \
   time { \
@@ -422,7 +605,6 @@ RUN \
     curl --silent --location --retry 3 "https://github.com/libevent/libevent/releases/download/release-${LIBEVENT_VERSION}-stable/libevent-${LIBEVENT_VERSION}-stable.tar.gz" \
       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libevent" && \
     cd "${__SOURCE_DIR__}/libevent/_build" && \
-    sed -i.orig -e "/^pkgconfigdir =/ s,/pkgconfig,/../_delete_/pkgconfig," ../Makefile.in && \
     ../configure \
       --quiet \
       --enable-shared \
@@ -442,7 +624,6 @@ RUN \
     curl --silent --location --retry 3 "https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz" \
       | tar xz --no-same-owner --strip-components=1 -C "${__SOURCE_DIR__}/libuv" && \
     cd "${__SOURCE_DIR__}/libuv/_build" && \
-    sed -i.orig -e "/^pkgconfigdir =/ s,/pkgconfig,/../_delete_/pkgconfig," ../Makefile.am && \
     ../autogen.sh && \
     ../configure \
       --quiet \

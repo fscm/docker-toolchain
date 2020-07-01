@@ -25,6 +25,8 @@ LIBFFI_TEST_FILE="libffi.c"
 LIBUV_TEST_FILE="libuv.c"
 MAKE_TEST_FILE="Makefile"
 PERL_TEST_FILE="perl.pl"
+READLINE_TEST_FILE="readline.c"
+XZ_TEST_FILE="xz.txt"
 
 
 # Functions
@@ -217,6 +219,24 @@ int main() {
 EOF
 }
 
+create_readline_test_files() {
+  cat << EOF > /tmp/${READLINE_TEST_FILE}
+#include <stdio.h>
+#include <stdlib.h>
+#include <readline/readline.h>
+int main() {
+  printf("%s\\n", readline("test> "));
+  return 0;
+}
+EOF
+}
+
+create_xz_test_files() {
+  cat << EOF > /tmp/${XZ_TEST_FILE}
+Hello XZ Utils!
+EOF
+}
+
 echo '=== Docker Build Test ==='
 
 # Create temporary dir (if needed)
@@ -237,6 +257,8 @@ create_libffi_test_files
 create_libevent_test_files
 create_libuv_test_files
 create_expat_test_files
+create_readline_test_files
+create_xz_test_files
 echo 'DONE'
 
 printf '[TEST] Check if Binutils were installed... '
@@ -278,7 +300,15 @@ if make --version > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 5
+  exit 6
+fi
+
+printf '[TEST] Check if Pkg-config is installed... '
+if pkg-config --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 7
 fi
 
 printf '[TEST] Check if Libtool is installed... '
@@ -369,12 +399,36 @@ else
   exit 16
 fi
 
+printf '[TEST] Check if XZ is installed... '
+if xz --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 16
+fi
+
+printf '[TEST] Check if SQLite is installed... '
+if sqlite3 --version > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 17
+fi
+
+printf '[TEST] Check if Python is installed... '
+if (python3 --version && python --version)> /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 18
+fi
+
 printf '[TEST] Check if GCC can compile... '
 if (gcc -o /tmp/gcc_test /tmp/${GCC_TEST_FILE} && /tmp/gcc_test) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 17
+  exit 19
 fi
 
 printf '[TEST] Check if G++ can compile... '
@@ -382,7 +436,7 @@ if (g++ -o /tmp/gxx_test /tmp/${GCC_TEST_FILE} && /tmp/gxx_test) > /dev/null 2>&
   echo 'OK'
 else
   echo 'Failed'
-  exit 18
+  exit 20
 fi
 
 printf '[TEST] Check if GLibC can be used... '
@@ -390,15 +444,23 @@ if (gcc -pthread -o /tmp/glibc_test /tmp/${GLIBC_TEST_FILE} && /tmp/glibc_test) 
   echo 'OK'
 else
   echo 'Failed'
-  exit 19
+  exit 21
 fi
 
 printf '[TEST] Check if M4 can be used... '
-if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q fscm) > /dev/null 2>&1; then
+if (printf 'define(TEST, fscm)\nTEST\n' | m4 | grep -q 'fscm') > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 20
+  exit 22
+fi
+
+printf '[TEST] Check if Readline can be used... '
+if (gcc -lreadline -o /tmp/readline_test /tmp/${READLINE_TEST_FILE} && echo 'Hello Readline!' | /tmp/readline_test | grep -q -e '^test> Hello Readline!$' -e '^Hello Readline!$') > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 23
 fi
 
 printf '[TEST] Check if Gettext can be used... '
@@ -406,7 +468,7 @@ if (gettext test) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 21
+  exit 24
 fi
 
 printf '[TEST] Check if BZip2 can be used... '
@@ -414,7 +476,7 @@ if (bzip2 --keep "/tmp/${BZIP2_TEST_FILE}" && mv "/tmp/${BZIP2_TEST_FILE}" "/tmp
   echo 'OK'
 else
   echo 'Failed'
-  exit 22
+  exit 25
 fi
 
 printf '[TEST] Check if Perl can be used... '
@@ -422,7 +484,7 @@ if (perl "/tmp/${PERL_TEST_FILE}") > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 23
+  exit 26
 fi
 
 printf '[TEST] Check if Automake can be used... '
@@ -430,7 +492,7 @@ if (cd /tmp && aclocal && automake --add-missing --foreign) > /dev/null 2>&1; th
   echo 'OK'
 else
   echo 'Failed'
-  exit 24
+  exit 27
 fi
 
 printf '[TEST] Check if Autoconf can be used... '
@@ -438,7 +500,7 @@ if (cd /tmp && autoconf && ./configure --quiet) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 25
+  exit 28
 fi
 
 printf '[TEST] Check if Make can be used... '
@@ -447,7 +509,7 @@ if (cd /tmp && make && ./auto_test) > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 26
+  exit 29
 fi
 
 printf '[TEST] Check if Libtool can be used... '
@@ -455,7 +517,7 @@ if (libtool --quiet --mode=compile --tag=CC cc -c /tmp/${GCC_TEST_FILE} -o /tmp/
   echo 'OK'
 else
   echo 'Failed'
-  exit 27
+  exit 30
 fi
 
 printf '[TEST] Check if Bison can be used... '
@@ -463,7 +525,7 @@ if (bison --output=/tmp/bison_test.c /tmp/${BISON_TEST_FILE} && g++ -o /tmp/biso
   echo 'OK'
 else
   echo 'Failed'
-  exit 28
+  exit 31
 fi
 
 printf '[TEST] Check if Expat (libexpat) can be used... '
@@ -471,7 +533,7 @@ if (gcc -lexpat -o /tmp/libexpat_test /tmp/${LIBEXPAT_TEST_FILE} && /tmp/libexpa
   echo 'OK'
 else
   echo 'Failed'
-  exit 29
+  exit 32
 fi
 
 printf '[TEST] Check if OpenSSL (and Root Certificates) can be used... '
@@ -479,7 +541,7 @@ if (echo | openssl s_client -connect google.com:443 2>&1) | grep -q 'Verify retu
   echo 'OK'
 else
   echo 'Failed'
-  exit 30
+  exit 33
 fi
 
 printf '[TEST] Check if Libffi can be used... '
@@ -487,7 +549,7 @@ if (gcc -lffi -o /tmp/libffi_test /tmp/${LIBFFI_TEST_FILE} && /tmp/libffi_test) 
   echo 'OK'
 else
   echo 'Failed'
-  exit 31
+  exit 34
 fi
 
 printf '[TEST] Check if Libevent can be used... '
@@ -495,7 +557,7 @@ if (gcc -levent -o /tmp/libevent_test /tmp/${LIBEVENT_TEST_FILE} && /tmp/libeven
   echo 'OK'
 else
   echo 'Failed'
-  exit 32
+  exit 35
 fi
 
 printf '[TEST] Check if Libuv can be used... '
@@ -503,7 +565,23 @@ if (gcc -luv -o /tmp/libuv_test /tmp/${LIBUV_TEST_FILE} && /tmp/libuv_test) > /d
   echo 'OK'
 else
   echo 'Failed'
-  exit 33
+  exit 36
+fi
+
+printf '[TEST] Check if XZ can be used... '
+if (xz --keep "/tmp/${XZ_TEST_FILE}" && mv "/tmp/${XZ_TEST_FILE}" "/tmp/${XZ_TEST_FILE}.orig" && xz --decompress "/tmp/${XZ_TEST_FILE}.xz" && cmp -s "/tmp/${XZ_TEST_FILE}.orig" "/tmp/${XZ_TEST_FILE}") > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 37
+fi
+
+printf '[TEST] Check if Python (including SQLite) can be used... '
+if (python -c 'import sqlite3' && python -c 'import _gdbm' && python -c 'import zlib' && pip list --format=columns && pip install --quiet pip-install-test && python -c 'import pip_install_test' && pip uninstall -y pip-install-test) > /dev/null 2>&1; then
+  echo 'OK'
+else
+  echo 'Failed'
+  exit 38
 fi
 
 printf '[TEST] Check if Busybox is installed... '
@@ -511,7 +589,7 @@ if busybox > /dev/null 2>&1; then
   echo 'OK'
 else
   echo 'Failed'
-  exit 34
+  exit 39
 fi
 
 exit 0
